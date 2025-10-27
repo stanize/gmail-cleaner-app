@@ -6,6 +6,8 @@ from collections import Counter
 import pandas as pd
 import os, re
 
+APP_URL = st.secrets.get("app_url", "https://yourusername.streamlit.app")
+
 # Streamlit page setup
 st.set_page_config(page_title="📬 Gmail Inbox Analyzer", page_icon="📨")
 
@@ -29,12 +31,13 @@ def authorize_gmail():
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
             "client_secret": st.secrets["google"]["client_secret"],
-            "redirect_uris": [st.request.url_root],
+            "redirect_uris": [st.secrets.get("app_url", "https://yourusername.streamlit.app")],
+
         }
     }
 
     flow = Flow.from_client_config(client_config, scopes=SCOPES)
-    flow.redirect_uri = st.request.url_root
+    flow.redirect_uri = APP_URL
 
     auth_url, _ = flow.authorization_url(prompt='consent', access_type='offline', include_granted_scopes='true')
     st.markdown(f"[🔑 Click here to authorize Gmail access]({auth_url})")
