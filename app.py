@@ -85,6 +85,40 @@ def gmail_manager():
                 st.success(f"✅ Moved {total} email(s) from {sender_email} to Trash!")
 
 
+
+#  Check if connected to Gmail
+query_params = st.query_params
+if "code" in query_params:
+    try:
+        client_config = {
+            "web": {
+                "client_id": st.secrets["google"]["client_id"],
+                "project_id": "gmail-cleaner",
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "client_secret": st.secrets["google"]["client_secret"],
+                "redirect_uris": [APP_URL],
+            }
+        }
+        flow = Flow.from_client_config(client_config, scopes=SCOPES)
+        flow.redirect_uri = APP_URL
+        flow.fetch_token(code=query_params["code"])
+
+        creds = flow.credentials
+        st.session_state["credentials"] = {
+            "token": creds.token,
+            "refresh_token": creds.refresh_token,
+            "token_uri": creds.token_uri,
+            "client_id": creds.client_id,
+            "client_secret": creds.client_secret,
+            "scopes": creds.scopes,
+        }
+        st.session_state["authorized"] = True
+        st.success("✅ Gmail authorization successful! You can now manage your inbox.")
+    except Exception as e:
+        st.error(f"Authorization failed: {e}")
+
+
 # ---------- App Flow ----------
 if "authorized" not in st.session_state:
     st.session_state.authorized = False
