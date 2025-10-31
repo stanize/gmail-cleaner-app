@@ -40,7 +40,31 @@ def authorize_gmail():
     flow.redirect_uri = APP_URL
 
     auth_url, _ = flow.authorization_url(prompt='consent', access_type='offline', include_granted_scopes='true')
-    st.markdown(f"[🔑 Click here to authorize Gmail access]({auth_url})")
+    st.markdown(
+        f"""
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="{auth_url}" target="_blank" style="text-decoration: none;">
+                <div style="
+                    display: inline-flex;
+                    align-items: center;
+                    background-color: #fff;
+                    color: #555;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    padding: 10px 16px;
+                    font-size: 15px;
+                    font-family: 'Roboto', sans-serif;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                ">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/4/4e/Gmail_Icon.png" 
+                         style="width:22px; height:22px; margin-right:10px;">
+                    <strong>Continue with Gmail</strong>
+                </div>
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 def analyze_inbox(service, max_messages):
     results = service.users().messages().list(userId='me', labelIds=['INBOX'], maxResults=max_messages).execute()
