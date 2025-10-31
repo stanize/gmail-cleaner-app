@@ -114,7 +114,8 @@ if "code" in query_params:
             "scopes": creds.scopes,
         }
         st.session_state["authorized"] = True
-        st.success("✅ Gmail authorization successful! You can now manage your inbox.")
+# DEBUG: uncomment this line to show success message
+#        st.success("✅ Gmail authorization successful! You can now manage your inbox.")
     except Exception as e:
         st.error(f"Authorization failed: {e}")
 
