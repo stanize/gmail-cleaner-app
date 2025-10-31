@@ -6,7 +6,7 @@ from collections import Counter
 import pandas as pd
 import os, re
 
-APP_URL = st.secrets.get("app_url", "https://yourusername.streamlit.app")
+APP_URL = st.secrets.get("app_url", "https://gmail-cleaner-app-cloud9.streamlit.app")
 
 # Streamlit page setup
 st.set_page_config(page_title="📬 Gmail Inbox Analyzer", page_icon="📨")
