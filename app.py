@@ -33,27 +33,29 @@ def authorize_gmail():
 
     st.markdown(
         f"""
-        <div style="text-align:center; margin-top:30px;">
-            <a href="{auth_url}" target="_blank">
-                <button style="
-                    background-color:#FF4B4B;
-                    color:white;
-                    border:none;
-                    border-radius:8px;
-                    padding:12px 24px;
-                    font-size:16px;
-                    cursor:pointer;
-                    font-weight:bold;
-                    box-shadow:0px 3px 6px rgba(0,0,0,0.3);
+        <div style="text-align: center; margin-top: 30px;">
+            <a href="{auth_url}" target="_blank" style="text-decoration: none;">
+                <div style="
+                    display: inline-flex;
+                    align-items: center;
+                    background-color: #fff;
+                    color: #555;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    padding: 10px 16px;
+                    font-size: 15px;
+                    font-family: 'Roboto', sans-serif;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                 ">
-                    🔑 Authorize Gmail Access
-                </button>
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/4/4e/Gmail_Icon.png" 
+                         style="width:22px; height:22px; margin-right:10px;">
+                    <strong>Connect with Gmail</strong>
+                </div>
             </a>
         </div>
         """,
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
-
 
 # ---------- Authorized Section ----------
 def gmail_manager():
