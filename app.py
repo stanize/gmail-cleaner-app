@@ -58,7 +58,7 @@ def authorize_gmail():
                 ">
                     <img src="https://upload.wikimedia.org/wikipedia/commons/4/4e/Gmail_Icon.png" 
                          style="width:22px; height:22px; margin-right:10px;">
-                    <strong>Continue with Gmail</strong>
+                    <strong>Connect with Gmail</strong>
                 </div>
             </a>
         </div>
