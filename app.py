@@ -275,6 +275,7 @@ def top_senders_tool(service):
 
 
 
+from datetime import datetime, time, timedelta
 
 def delete_top_senders(service):
     st.subheader("🗑️ Clean Up by Sender")
@@ -283,7 +284,17 @@ def delete_top_senders(service):
         st.warning("⚠️ Run the analysis first to identify top senders.")
         return
 
+    # Reset sender checkboxes when entering delete mode
+    for key in list(st.session_state.keys()):
+        if key.startswith("sender_"):
+            del st.session_state[key]
+
     df = st.session_state["top_senders"]
+    params = st.session_state.get("analysis_params", {})
+    start_ts = int(datetime.combine(params.get("start"), time.min).timestamp())
+    end_ts = int((datetime.combine(params.get("end"), time.min) + timedelta(days=1)).timestamp())
+
+    st.info(f"📅 Deleting only emails between {params.get('start')} and {params.get('end')}")
 
     st.write("Select the senders you want to delete emails from:")
     selected = []
@@ -291,7 +302,7 @@ def delete_top_senders(service):
     # Display each sender with checkbox
     for i, row in df.iterrows():
         if st.checkbox(f"{row['Sender']} — {row['Count']} emails", key=f"sender_{i}"):
-            selected.append(row['Sender'])
+            selected.append(row["Sender"])
 
     if not selected:
         st.info("No senders selected yet.")
@@ -299,13 +310,13 @@ def delete_top_senders(service):
 
     st.success(f"✅ You selected {len(selected)} sender(s): {', '.join(selected)}")
 
-    if st.button("🚮 Move all emails from selected senders to Trash"):
+    if st.button("🚮 Move selected emails to Trash"):
         total_deleted = 0
         progress = st.progress(0)
         status = st.empty()
 
         for idx, sender in enumerate(selected):
-            query = f"from:{sender}"
+            query = f"from:{sender} after:{start_ts} before:{end_ts}"
             try:
                 results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
                 messages = results.get("messages", [])
@@ -317,7 +328,7 @@ def delete_top_senders(service):
             progress.progress((idx + 1) / len(selected))
             status.text(f"Processed {idx + 1}/{len(selected)} senders...")
 
-        st.success(f"✅ Moved {total_deleted} emails to Trash.")
+        st.success(f"✅ Moved {total_deleted} emails to Trash (filtered by date range).")
         progress.empty()
         status.empty()
 
