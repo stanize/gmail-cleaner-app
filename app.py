@@ -62,28 +62,6 @@ def authorize_gmail():
         unsafe_allow_html=True
     )
 
-
-def search_by_sender(service):
-    sender_email = st.text_input("Enter sender email to search", placeholder="e.g. no-reply@company.com")
-
-    if sender_email:
-        query = f"from:{sender_email}"
-        results = service.users().messages().list(userId="me", q=query).execute()
-        messages = results.get("messages", [])
-        total = len(messages)
-
-        if total == 0:
-            st.info(f"No emails found from {sender_email}")
-        else:
-            st.session_state["search_results"] = {
-                "sender": sender_email,
-                "messages": messages,
-                "total": total,
-            }
-            st.success(f"Found {total} email(s) from {sender_email}")
-
-
-
 def delete_emails_from_sender(service):
     result = st.session_state["search_results"]
     sender = result["sender"]
@@ -106,6 +84,31 @@ def delete_emails_from_sender(service):
         if st.button("🔄 Clear & Start Over"):
             st.session_state.pop("search_results")
             st.rerun()
+
+
+
+def search_by_sender(service):
+    sender_email = st.text_input("Enter sender email to search", placeholder="e.g. no-reply@company.com")
+
+    if sender_email:
+        query = f"from:{sender_email}"
+        results = service.users().messages().list(userId="me", q=query).execute()
+        messages = results.get("messages", [])
+        total = len(messages)
+
+        if total == 0:
+            st.info(f"No emails found from {sender_email}")
+        else:
+            st.session_state["search_results"] = {
+                "sender": sender_email,
+                "messages": messages,
+                "total": total,
+            }
+            st.success(f"Found {total} email(s) from {sender_email}")
+            st.rerun()   # 👈 ADD THIS LINE
+
+
+
 
 
 
