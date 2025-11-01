@@ -150,7 +150,7 @@ def top_senders_this_year(service):
 
 # ---------- Gmail Management ----------
 def gmail_manager():
-    st.subheader("📧 Manage Emails by Sender")
+    st.subheader("📧 Gmail Inbox Analysis")
 
     creds_info = st.session_state.get("credentials")
     if creds_info:
@@ -158,7 +158,6 @@ def gmail_manager():
         if creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
-                # Update refreshed credentials
                 st.session_state["credentials"] = {
                     "token": creds.token,
                     "refresh_token": creds.refresh_token,
@@ -175,19 +174,17 @@ def gmail_manager():
         st.error("⚠️ No valid Gmail credentials found.")
         st.stop()
 
+    # ✅ Create Gmail service
     service = build("gmail", "v1", credentials=creds)
 
-    # --- Section control ---
-#    if "search_results" not in st.session_state:
-#        search_by_sender(service)
-#    else:
-#        delete_emails_from_sender(service)
+    # ✅ Display only analysis feature for now
+    st.info("This version is running in analysis-only mode (delete disabled).")
 
-st.divider()
-if st.button("📊 Show Top 10 Senders (This Year)"):
-    top_senders_this_year(service)
-    
-
+    st.divider()
+    if st.button("📊 Show Top 10 Senders (This Year)"):
+        top_senders_this_year(service)
+        
+        
 # ---------- Handle Gmail OAuth Callback ----------
 def handle_auth_callback():
     query_params = st.query_params
