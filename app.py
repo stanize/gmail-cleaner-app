@@ -119,38 +119,50 @@ from email.utils import parseaddr
 
 
 from collections import Counter
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, date
+import streamlit as st
 from email.utils import parseaddr
 
 
 def top_senders_tool(service):
+    # Keep track that we're inside this screen
+    if "top_senders_open" not in st.session_state:
+        st.session_state.top_senders_open = True
+
     st.subheader("📊 Top Senders — Setup")
 
-    # Defaults
+    # --- Defaults ---
     current_year = datetime.now().year
     default_start = date(current_year, 1, 1)
     default_end = date.today()
 
-    # Inputs
+    # --- Input fields (preserve state) ---
     c1, c2 = st.columns(2)
     with c1:
-        start_date = st.date_input("Start date", value=default_start, key="ts_start")
+        st.session_state.start_date = st.date_input(
+            "Start date",
+            value=st.session_state.get("start_date", default_start),
+            key="ts_start"
+        )
     with c2:
-        end_date = st.date_input("End date", value=default_end, key="ts_end")
+        st.session_state.end_date = st.date_input(
+            "End date",
+            value=st.session_state.get("end_date", default_end),
+            key="ts_end"
+        )
 
-    email_limit = st.number_input(
+    st.session_state.email_limit = st.number_input(
         "Maximum emails to analyze",
-        min_value=100, max_value=10000, step=100, value=2000,
+        min_value=100, max_value=10000, step=100, value=st.session_state.get("email_limit", 2000),
         help="This caps how many emails will be scanned.",
         key="ts_limit"
     )
 
     st.divider()
-    st.write(f"🗓️ **Selected Range:** {start_date} → {end_date}")
-    st.write(f"📬 **Email Limit:** {email_limit:,}")
+    st.write(f"🗓️ **Selected Range:** {st.session_state.start_date} → {st.session_state.end_date}")
+    st.write(f"📬 **Email Limit:** {st.session_state.email_limit:,}")
 
-    # (No fetching/processing yet — just UI)
-
+    st.info("✅ Your selections will now stay in place — even when you change them.")
 
 
 # ---------- Gmail Management ----------
