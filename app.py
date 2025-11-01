@@ -63,6 +63,54 @@ def authorize_gmail():
     )
 
 
+def search_by_sender(service):
+    sender_email = st.text_input("Enter sender email to search", placeholder="e.g. no-reply@company.com")
+
+    if sender_email:
+        query = f"from:{sender_email}"
+        results = service.users().messages().list(userId="me", q=query).execute()
+        messages = results.get("messages", [])
+        total = len(messages)
+
+        if total == 0:
+            st.info(f"No emails found from {sender_email}")
+        else:
+            st.session_state["search_results"] = {
+                "sender": sender_email,
+                "messages": messages,
+                "total": total,
+            }
+            st.success(f"Found {total} email(s) from {sender_email}")
+
+
+
+def delete_emails_from_sender(service):
+    result = st.session_state["search_results"]
+    sender = result["sender"]
+    messages = result["messages"]
+    total = result["total"]
+
+    st.success(f"Found {total} email(s) from {sender}")
+
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        if st.button("🗑️ Move these emails to Trash"):
+            progress = st.progress(0)
+            for i, msg in enumerate(messages):
+                service.users().messages().trash(userId="me", id=msg["id"]).execute()
+                progress.progress((i + 1) / total)
+            st.success(f"✅ Moved {total} email(s) from {sender} to Trash!")
+
+    with col2:
+        if st.button("🔄 Clear & Start Over"):
+            st.session_state.pop("search_results")
+            st.rerun()
+
+
+
+
+
 # ---------- Gmail Management ----------
 def gmail_manager():
     st.subheader("📧 Manage Emails by Sender")
@@ -92,26 +140,12 @@ def gmail_manager():
 
     service = build("gmail", "v1", credentials=creds)
 
-    sender_email = st.text_input("Enter sender email to search", placeholder="e.g. no-reply@company.com")
-
-    if sender_email:
-        query = f"from:{sender_email}"
-        results = service.users().messages().list(userId="me", q=query).execute()
-        messages = results.get("messages", [])
-        total = len(messages)
-
-        if total == 0:
-            st.info(f"No emails found from {sender_email}")
-        else:
-            st.success(f"Found {total} email(s) from {sender_email}")
-
-            if st.button("🗑️ Move these emails to Trash"):
-                progress = st.progress(0)
-                for i, msg in enumerate(messages):
-                    service.users().messages().trash(userId="me", id=msg["id"]).execute()
-                    progress.progress((i + 1) / total)
-                st.success(f"✅ Moved {total} email(s) from {sender_email} to Trash!")
-
+    # --- Section control ---
+    if "search_results" not in st.session_state:
+        search_by_sender(service)
+    else:
+        delete_emails_from_sender(service)
+        
 
 # ---------- Handle Gmail OAuth Callback ----------
 def handle_auth_callback():
