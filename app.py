@@ -275,13 +275,17 @@ def top_senders_tool(service):
         st.success(f"✅ Analysis complete — found {len(df)} unique senders.")
 
         # ✅ Store analysis parameters for cleanup use
+        # ✅ Store analysis parameters safely in session state
         st.session_state["analysis_params"] = {
-            "start": start_date,
-            "end": end_date,
-            "limit": limit,
-            "top_n": top_n,
+            "start": st.session_state.get("analysis_start"),
+            "end": st.session_state.get("analysis_end"),
+            "limit": st.session_state.get("analysis_limit", 2000),
+            "top_n": st.session_state.get("analysis_top_n", 10),
         }
 
+        # ✅ Mark analysis as complete
+        st.session_state["analysis_done"] = True
+        
         # ✅ Show navigation to cleanup section
         st.divider()
         st.markdown("### 🧹 Next Step: Clean Up Unwanted Senders")
