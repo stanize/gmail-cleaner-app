@@ -113,10 +113,14 @@ def search_by_sender(service):
 
 
 
+
 from datetime import datetime, date, time, timedelta
 from collections import Counter
 from email.utils import parseaddr
 import streamlit as st
+import pandas as pd
+import plotly.express as px
+
 
 def top_senders_tool(service):
     st.subheader("📊 Top Senders — Setup")
@@ -135,13 +139,13 @@ def top_senders_tool(service):
         start_date = st.date_input(
             "Start date",
             value=st.session_state.get("start_date", default_start),
-            key="ts_start"
+            key="ts_start",
         )
     with c2:
         end_date = st.date_input(
             "End date",
             value=st.session_state.get("end_date", default_end),
-            key="ts_end"
+            key="ts_end",
         )
 
     email_limit = st.number_input(
@@ -150,27 +154,33 @@ def top_senders_tool(service):
         max_value=10000,
         step=100,
         value=st.session_state.get("email_limit", 2000),
-        help="Limit how many emails will be scanned for analysis.",
-        key="ts_limit"
+        help="How many emails to scan for analysis.",
+        key="ts_limit",
+    )
+
+    top_n = st.number_input(
+        "Number of top senders to display",
+        min_value=5,
+        max_value=50,
+        step=1,
+        value=st.session_state.get("top_n", 10),
+        help="Choose how many top senders to display in the results.",
+        key="ts_topn",
     )
 
     # --- Save user choices ---
     st.session_state.start_date = start_date
     st.session_state.end_date = end_date
     st.session_state.email_limit = email_limit
+    st.session_state.top_n = top_n
 
     st.divider()
     st.write(f"🗓️ **Selected Range:** {start_date} → {end_date}")
     st.write(f"📬 **Email Limit:** {email_limit:,}")
+    st.write(f"🏆 **Top Senders to Show:** {top_n}")
 
-    # --- Run analysis when button clicked ---
+    # --- Run analysis ---
     if st.button("▶️ Run Analysis"):
-        st.session_state.analysis_params = {
-            "start": start_date,
-            "end": end_date,
-            "limit": email_limit
-        }
-
         start_ts = int(datetime.combine(start_date, time.min).timestamp())
         end_ts = int((datetime.combine(end_date, time.min) + timedelta(days=1)).timestamp())
         query = f"in:inbox after:{start_ts} before:{end_ts} -in:spam -in:trash"
@@ -184,12 +194,12 @@ def top_senders_tool(service):
         results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
         messages.extend(results.get("messages", []))
 
-        while 'nextPageToken' in results and len(messages) < email_limit:
+        while "nextPageToken" in results and len(messages) < email_limit:
             results = service.users().messages().list(
                 userId="me",
                 q=query,
-                pageToken=results['nextPageToken'],
-                maxResults=500
+                pageToken=results["nextPageToken"],
+                maxResults=500,
             ).execute()
             messages.extend(results.get("messages", []))
             progress.progress(min(len(messages) / email_limit, 1.0))
@@ -216,7 +226,7 @@ def top_senders_tool(service):
                     userId="me",
                     id=msg["id"],
                     format="metadata",
-                    metadataHeaders=["From"]
+                    metadataHeaders=["From"],
                 ).execute()
                 headers = data["payload"]["headers"]
                 sender_val = next((h["value"] for h in headers if h["name"] == "From"), None)
@@ -233,13 +243,29 @@ def top_senders_tool(service):
         status.text("✅ Analysis complete!")
         progress.empty()
 
-        counts = Counter(senders).most_common(10)
+        counts = Counter(senders).most_common(top_n)
         st.divider()
-        st.success("Top 10 senders:")
-        st.table({
-            "Sender": [s for s, _ in counts],
-            "Count": [c for _, c in counts]
-        })
+        st.success(f"Top {top_n} senders:")
+
+        df = pd.DataFrame(counts, columns=["Sender", "Count"])
+        st.table(df)
+
+        # --- Step 4: Chart ---
+        fig = px.bar(
+            df.sort_values("Count"),
+            x="Count",
+            y="Sender",
+            orientation="h",
+            text="Count",
+            title=f"Top {top_n} Senders by Email Count",
+        )
+        fig.update_layout(
+            xaxis_title="Number of Emails",
+            yaxis_title="Sender",
+            template="plotly_white",
+            height=400,
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 
 
