@@ -120,31 +120,46 @@ def top_senders_this_year(service):
     year_start = datetime(datetime.now().year, 1, 1)
     query = f"in:inbox after:{int(year_start.timestamp())} -in:spam -in:trash"
 
-    st.info("Fetching emails... this may take a few seconds ⏳")
-
+    st.info("Fetching email list... ⏳")
     results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
     messages = results.get("messages", [])
+    total = len(messages)
 
-    senders = []
-    for m in messages:
-        msg = service.users().messages().get(
-            userId="me", id=m["id"], format="metadata", metadataHeaders=["From"]
-        ).execute()
-        headers = msg["payload"]["headers"]
-        sender = [h["value"] for h in headers if h["name"] == "From"]
-        if sender:
-            email = parseaddr(sender[0])[1].lower()
-            senders.append(email)
-
-    if not senders:
+    if total == 0:
         st.warning("No messages found this year.")
         return
 
-    counts = Counter(senders).most_common(10)
+    st.success(f"Found {total} emails in your inbox this year.")
+    progress = st.progress(0)
+    status_text = st.empty()
 
+    senders = []
+
+    # --- Iterate with progress ---
+    for i, m in enumerate(messages):
+        try:
+            msg = service.users().messages().get(
+                userId="me", id=m["id"], format="metadata", metadataHeaders=["From"]
+            ).execute()
+            headers = msg["payload"]["headers"]
+            sender = [h["value"] for h in headers if h["name"] == "From"]
+            if sender:
+                email = parseaddr(sender[0])[1].lower()
+                senders.append(email)
+        except Exception:
+            continue  # skip if any message fails
+
+        # Update progress
+        progress.progress((i + 1) / total)
+        status_text.text(f"Analyzed {i+1}/{total} emails...")
+
+    status_text.text("✅ Analysis complete!")
+
+    # --- Count and display top senders ---
+    counts = Counter(senders).most_common(10)
+    st.divider()
     st.success("Here are your top 10 senders this year:")
     st.table({"Sender": [c[0] for c in counts], "Count": [c[1] for c in counts]})
-
 
 
 
