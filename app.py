@@ -110,9 +110,18 @@ def search_by_sender(service):
             }
             st.success(f"Found {total} email(s) from {sender_email}")
             st.rerun()   # 👈 ADD THIS LINE
-
 def top_senders_this_year(service):
     st.subheader("📊 Top Senders (This Year)")
+
+    # --- User input for limit ---
+    email_limit = st.number_input(
+        "Set maximum number of emails to analyze (for performance)",
+        min_value=100,
+        max_value=10000,
+        value=2000,
+        step=100,
+        help="Set how many recent emails should be scanned. A smaller number loads faster."
+    )
 
     year_start = datetime(datetime.now().year, 1, 1)
     query = f"in:inbox after:{int(year_start.timestamp())} -in:spam -in:trash"
@@ -139,10 +148,10 @@ def top_senders_this_year(service):
         if len(messages) % 500 == 0:
             status_area.info(f"📬 Loaded {len(messages)} messages so far...")
 
-        # optional safety limit
-        if len(messages) >= 2000:
-            st.warning("⚠️ Showing only the first 2000 emails for performance reasons.")
-            messages = messages[:2000]
+        # stop at user-defined limit
+        if len(messages) >= email_limit:
+            st.warning(f"⚠️ Showing only the first {email_limit} emails for performance reasons.")
+            messages = messages[:email_limit]
             break
 
     total = len(messages)
