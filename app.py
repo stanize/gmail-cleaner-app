@@ -213,8 +213,19 @@ def gmail_manager():
     st.info("This version is running in analysis-only mode (delete disabled).")
 
     st.divider()
-    if st.button("📊 Show Top Senders "):
-        top_senders_tool(service)
+
+    # Initialize flag if not set
+    if "show_top_senders" not in st.session_state:
+        st.session_state.show_top_senders = False
+
+    # Toggle on when the button is pressed
+    if st.button("📊 Open Top Senders Tool"):
+        st.session_state.show_top_senders = True
+
+    # Always show if flag is True
+    if st.session_state.show_top_senders:
+        top_senders_tool(service)      
+
         
         
 # ---------- Handle Gmail OAuth Callback ----------
