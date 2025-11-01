@@ -110,60 +110,95 @@ def search_by_sender(service):
             }
             st.success(f"Found {total} email(s) from {sender_email}")
             st.rerun()   # 👈 ADD THIS LINE
-def top_senders_this_year(service):
-    st.subheader("📊 Top Senders (This Year)")
 
-    # --- User input for limit ---
-    email_limit = st.number_input(
-        "Set maximum number of emails to analyze (for performance)",
-        min_value=100,
-        max_value=10000,
-        value=2000,
-        step=100,
-        help="Set how many recent emails should be scanned. A smaller number loads faster."
-    )
 
-    year_start = datetime(datetime.now().year, 1, 1)
-    query = f"in:inbox after:{int(year_start.timestamp())} -in:spam -in:trash"
 
-    # Step 1: Temporary message area for loading
+from collections import Counter
+from datetime import datetime, date, time, timedelta
+from email.utils import parseaddr
+
+def top_senders_tool(service):
+    st.subheader("📊 Top Senders")
+
+    # UI state
+    if "top_senders_ui" not in st.session_state:
+        st.session_state.top_senders_ui = {"show_form": False, "ran": False}
+
+    ui = st.session_state.top_senders_ui
+
+    # Step 0: entry button
+    if not ui["show_form"] and not ui["ran"]:
+        if st.button("🧭 Choose date range & limit"):
+            ui["show_form"] = True
+            st.rerun()
+        return
+
+    # Step 1: options form
+    if ui["show_form"] and not ui["ran"]:
+        with st.form("top_senders_form", clear_on_submit=False):
+            c1, c2 = st.columns(2)
+            with c1:
+                start_d = st.date_input("Start date", value=date(datetime.now().year, 1, 1))
+            with c2:
+                end_d = st.date_input("End date", value=date.today())
+
+            limit = st.number_input(
+                "Max emails to analyze",
+                min_value=100, max_value=10000, step=100, value=2000,
+                help="Higher = more accurate, slower."
+            )
+
+            submitted = st.form_submit_button("▶️ Run analysis")
+        # Cancel outside the form (forms only submit one button)
+        if st.button("✖️ Cancel"):
+            st.session_state.top_senders_ui = {"show_form": False, "ran": False}
+            st.rerun()
+
+        if not submitted:
+            return
+
+        # store parameters and proceed
+        ui["show_form"] = False
+        ui["ran"] = True
+        ui["params"] = {"start": start_d, "end": end_d, "limit": int(limit)}
+        st.rerun()
+
+    # Step 2: analysis (runs after submit)
+    p = ui["params"]
+    start_ts = int(datetime.combine(p["start"], time.min).timestamp())
+    # Gmail "before:" is exclusive — add one day to include end date
+    before_ts = int((datetime.combine(p["end"], time.min) + timedelta(days=1)).timestamp())
+    query = f"in:inbox after:{start_ts} before:{before_ts} -in:spam -in:trash"
+
+    # Temporary status area while fetching message IDs
     status_area = st.empty()
     status_area.info("Fetching email list... ⏳")
 
-    # --- Fetch all message IDs (with pagination) ---
+    # Pagination with cap
     messages = []
     results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
     messages.extend(results.get("messages", []))
-
-    while 'nextPageToken' in results:
+    while 'nextPageToken' in results and len(messages) < p["limit"]:
         results = service.users().messages().list(
-            userId="me",
-            q=query,
-            pageToken=results['nextPageToken'],
-            maxResults=500
+            userId="me", q=query, pageToken=results['nextPageToken'], maxResults=500
         ).execute()
         messages.extend(results.get("messages", []))
-
-        # temporary progress message while fetching
         if len(messages) % 500 == 0:
             status_area.info(f"📬 Loaded {len(messages)} messages so far...")
-
-        # stop at user-defined limit
-        if len(messages) >= email_limit:
-            st.warning(f"⚠️ Showing only the first {email_limit} emails for performance reasons.")
-            messages = messages[:email_limit]
-            break
+    if len(messages) > p["limit"]:
+        messages = messages[:p["limit"]]
+        st.warning(f"⚠️ Showing only the first {p['limit']} emails for performance.")
 
     total = len(messages)
     if total == 0:
-        status_area.warning("No messages found this year.")
+        status_area.warning("No messages found for the selected range.")
+        ui["ran"] = False
         return
 
-    # Clear temporary messages and show summary
     status_area.empty()
-    st.success(f"Found {total} emails in your inbox this year.")
+    st.success(f"Found {total} emails in the selected range.")
 
-    # --- Step 2: Analyze emails with live progress ---
+    # Analyze with progress
     progress = st.progress(0)
     status_text = st.empty()
     senders = []
@@ -174,25 +209,26 @@ def top_senders_this_year(service):
                 userId="me", id=m["id"], format="metadata", metadataHeaders=["From"]
             ).execute()
             headers = msg["payload"]["headers"]
-            sender = [h["value"] for h in headers if h["name"] == "From"]
-            if sender:
-                email = parseaddr(sender[0])[1].lower()
-                senders.append(email)
+            sender_val = next((h["value"] for h in headers if h["name"] == "From"), None)
+            if sender_val:
+                senders.append(parseaddr(sender_val)[1].lower())
         except Exception:
-            continue
-
+            pass
         if (i + 1) % 10 == 0 or (i + 1) == total:
             progress.progress((i + 1) / total)
             status_text.text(f"Analyzed {i + 1}/{total} emails...")
 
     status_text.text("✅ Analysis complete!")
 
-    # --- Step 3: Display results ---
     counts = Counter(senders).most_common(10)
     st.divider()
-    st.success("Here are your top 10 senders this year:")
-    st.table({"Sender": [c[0] for c in counts], "Count": [c[1] for c in counts]})
+    st.success("Top 10 senders:")
+    st.table({"Sender": [s for s, _ in counts], "Count": [c for _, c in counts]})
 
+    # Reset
+    if st.button("🔁 New analysis"):
+        st.session_state.top_senders_ui = {"show_form": False, "ran": False}
+        st.rerun()
 
 # ---------- Gmail Management ----------
 def gmail_manager():
@@ -227,8 +263,8 @@ def gmail_manager():
     st.info("This version is running in analysis-only mode (delete disabled).")
 
     st.divider()
-    if st.button("📊 Show Top 10 Senders (This Year)"):
-        top_senders_this_year(service)
+    if st.button("📊 Show Top Senders "):
+        top_senders_tool(service)
         
         
 # ---------- Handle Gmail OAuth Callback ----------
