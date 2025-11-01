@@ -3,6 +3,10 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
+from collections import Counter
+from datetime import datetime
+from email.utils import parseaddr
+
 
 # ---------- Constants ----------
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
@@ -109,7 +113,37 @@ def search_by_sender(service):
 
 
 
+def top_senders_this_year(service):
+    st.subheader("📊 Top Senders (This Year)")
 
+    # --- Gmail query for this year ---
+    year_start = datetime(datetime.now().year, 1, 1)
+    query = f"in:inbox after:{int(year_start.timestamp())} -in:spam -in:trash"
+
+    st.info("Fetching emails... this may take a few seconds ⏳")
+
+    results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
+    messages = results.get("messages", [])
+
+    senders = []
+    for m in messages:
+        msg = service.users().messages().get(
+            userId="me", id=m["id"], format="metadata", metadataHeaders=["From"]
+        ).execute()
+        headers = msg["payload"]["headers"]
+        sender = [h["value"] for h in headers if h["name"] == "From"]
+        if sender:
+            email = parseaddr(sender[0])[1].lower()
+            senders.append(email)
+
+    if not senders:
+        st.warning("No messages found this year.")
+        return
+
+    counts = Counter(senders).most_common(10)
+
+    st.success("Here are your top 10 senders this year:")
+    st.table({"Sender": [c[0] for c in counts], "Count": [c[1] for c in counts]})
 
 
 
@@ -144,11 +178,15 @@ def gmail_manager():
     service = build("gmail", "v1", credentials=creds)
 
     # --- Section control ---
-    if "search_results" not in st.session_state:
-        search_by_sender(service)
-    else:
-        delete_emails_from_sender(service)
-        
+#    if "search_results" not in st.session_state:
+#        search_by_sender(service)
+#    else:
+#        delete_emails_from_sender(service)
+
+st.divider()
+if st.button("📊 Show Top 10 Senders (This Year)"):
+    top_senders_this_year(service)
+    
 
 # ---------- Handle Gmail OAuth Callback ----------
 def handle_auth_callback():
