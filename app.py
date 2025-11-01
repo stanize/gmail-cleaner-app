@@ -2,14 +2,19 @@ import streamlit as st
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 
-st.set_page_config(page_title="📬 Gmail Inbox Analyzer", page_icon="📨")
-
+# ---------- Constants ----------
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 APP_URL = st.secrets.get("app_url", "https://gmail-cleaner-app-cloud9.streamlit.app")
 
-st.title("📬 Gmail Inbox Analyzer")
-st.write("Analyze and clean your Gmail inbox safely — directly from your browser.")
+
+# ---------- Initialize Page ----------
+def init():
+    st.set_page_config(page_title="📬 Gmail Inbox Analyzer", page_icon="📨")
+    st.title("📬 Gmail Inbox Analyzer")
+    st.write("Analyze and clean your Gmail inbox safely — directly from your browser.")
+
 
 # ---------- Gmail Authorization ----------
 def authorize_gmail():
@@ -57,11 +62,10 @@ def authorize_gmail():
         unsafe_allow_html=True
     )
 
-# ---------- Authorized Section ----------
+
+# ---------- Gmail Management ----------
 def gmail_manager():
     st.subheader("📧 Manage Emails by Sender")
-
-    from google.auth.transport.requests import Request
 
     creds_info = st.session_state.get("credentials")
     if creds_info:
@@ -69,7 +73,7 @@ def gmail_manager():
         if creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
-                # Update refreshed credentials back into session
+                # Update refreshed credentials
                 st.session_state["credentials"] = {
                     "token": creds.token,
                     "refresh_token": creds.refresh_token,
@@ -109,47 +113,55 @@ def gmail_manager():
                 st.success(f"✅ Moved {total} email(s) from {sender_email} to Trash!")
 
 
-
-#  Check if connected to Gmail
-query_params = st.query_params
-if "code" in query_params:
-    try:
-        client_config = {
-            "web": {
-                "client_id": st.secrets["google"]["client_id"],
-                "project_id": "gmail-cleaner",
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "client_secret": st.secrets["google"]["client_secret"],
-                "redirect_uris": [APP_URL],
+# ---------- Handle Gmail OAuth Callback ----------
+def handle_auth_callback():
+    query_params = st.query_params
+    if "code" in query_params and not st.session_state.get("authorized"):
+        try:
+            client_config = {
+                "web": {
+                    "client_id": st.secrets["google"]["client_id"],
+                    "project_id": "gmail-cleaner",
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                    "client_secret": st.secrets["google"]["client_secret"],
+                    "redirect_uris": [APP_URL],
+                }
             }
-        }
-        flow = Flow.from_client_config(client_config, scopes=SCOPES)
-        flow.redirect_uri = APP_URL
-        flow.fetch_token(code=query_params["code"])
+            flow = Flow.from_client_config(client_config, scopes=SCOPES)
+            flow.redirect_uri = APP_URL
+            flow.fetch_token(code=query_params["code"])
 
-        creds = flow.credentials
-        st.session_state["credentials"] = {
-            "token": creds.token,
-            "refresh_token": creds.refresh_token,
-            "token_uri": creds.token_uri,
-            "client_id": creds.client_id,
-            "client_secret": creds.client_secret,
-            "scopes": creds.scopes,
-        }
-        st.session_state["authorized"] = True
-# DEBUG: uncomment this line to show success message
-#        st.success("✅ Gmail authorization successful! You can now manage your inbox.")
-    except Exception as e:
-        st.error(f"Gmail Authorization failed: {e}")
+            creds = flow.credentials
+            st.session_state["credentials"] = {
+                "token": creds.token,
+                "refresh_token": creds.refresh_token,
+                "token_uri": creds.token_uri,
+                "client_id": creds.client_id,
+                "client_secret": creds.client_secret,
+                "scopes": creds.scopes,
+            }
+            st.session_state["authorized"] = True
+            st.query_params.clear()  # Clean the URL
+        except Exception as e:
+            if not st.session_state.get("credentials"):
+                st.error(f"Gmail Authorization failed: {e}")
 
 
-# ---------- App Flow ----------
-if "authorized" not in st.session_state:
-    st.session_state.authorized = False
+# ---------- Main App ----------
+def main():
+    init()
+    handle_auth_callback()
 
-if not st.session_state.authorized:
-    st.info("Please authorize Gmail to continue.")
-    authorize_gmail()
-else:
-    gmail_manager()
+    if "authorized" not in st.session_state:
+        st.session_state.authorized = False
+
+    if not st.session_state.authorized:
+        st.info("Please authorize Gmail to continue.")
+        authorize_gmail()
+    else:
+        gmail_manager()
+
+
+if __name__ == "__main__":
+    main()
