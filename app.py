@@ -111,16 +111,17 @@ def search_by_sender(service):
             st.success(f"Found {total} email(s) from {sender_email}")
             st.rerun()   # 👈 ADD THIS LINE
 
-
 def top_senders_this_year(service):
     st.subheader("📊 Top Senders (This Year)")
 
     year_start = datetime(datetime.now().year, 1, 1)
     query = f"in:inbox after:{int(year_start.timestamp())} -in:spam -in:trash"
 
-    st.info("Fetching email list... ⏳")
+    # Step 1: Temporary message area for loading
+    status_area = st.empty()
+    status_area.info("Fetching email list... ⏳")
 
-    # --- Step 1: Fetch all message IDs (with pagination) ---
+    # --- Fetch all message IDs (with pagination) ---
     messages = []
     results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
     messages.extend(results.get("messages", []))
@@ -133,9 +134,12 @@ def top_senders_this_year(service):
             maxResults=500
         ).execute()
         messages.extend(results.get("messages", []))
-        st.write(f"📬 Loaded {len(messages)} messages so far...")
 
-        # Optional: safety limit to avoid overloading
+        # temporary progress message while fetching
+        if len(messages) % 500 == 0:
+            status_area.info(f"📬 Loaded {len(messages)} messages so far...")
+
+        # optional safety limit
         if len(messages) >= 2000:
             st.warning("⚠️ Showing only the first 2000 emails for performance reasons.")
             messages = messages[:2000]
@@ -143,12 +147,14 @@ def top_senders_this_year(service):
 
     total = len(messages)
     if total == 0:
-        st.warning("No messages found this year.")
+        status_area.warning("No messages found this year.")
         return
 
+    # Clear temporary messages and show summary
+    status_area.empty()
     st.success(f"Found {total} emails in your inbox this year.")
 
-    # --- Step 2: Analyze with live progress ---
+    # --- Step 2: Analyze emails with live progress ---
     progress = st.progress(0)
     status_text = st.empty()
     senders = []
@@ -177,7 +183,6 @@ def top_senders_this_year(service):
     st.divider()
     st.success("Here are your top 10 senders this year:")
     st.table({"Sender": [c[0] for c in counts], "Count": [c[1] for c in counts]})
-
 
 
 # ---------- Gmail Management ----------
