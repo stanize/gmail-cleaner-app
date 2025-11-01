@@ -270,6 +270,28 @@ def top_senders_tool(service):
             height=450,
         )
         st.plotly_chart(fig, use_container_width=True)
+        
+        # ✅ Show success after chart
+        st.success(f"✅ Analysis complete — found {len(df)} unique senders.")
+
+        # ✅ Store analysis parameters for cleanup use
+        st.session_state["analysis_params"] = {
+            "start": start_date,
+            "end": end_date,
+            "limit": limit,
+            "top_n": top_n,
+        }
+
+        # ✅ Show navigation to cleanup section
+        st.divider()
+        st.markdown("### 🧹 Next Step: Clean Up Unwanted Senders")
+        st.info("You can now delete emails from selected senders using the cleanup section.")
+
+        if st.button("🚮 Go to Cleanup Section"):
+            st.session_state["show_top_senders"] = False
+            st.session_state["show_cleanup"] = True
+            st.rerun()
+
 
 
 
@@ -357,7 +379,6 @@ def delete_top_senders(service):
 
 
 
-
 # ---------- Gmail Management ----------
 def gmail_manager():
     creds_info = st.session_state.get("credentials")
@@ -385,14 +406,38 @@ def gmail_manager():
     # ✅ Create Gmail service
     service = build("gmail", "v1", credentials=creds)
 
-    # ---------- Tabs for Analysis & Cleanup ----------
+    # ✅ Initialize active tab flag
+    if "active_tab" not in st.session_state:
+        st.session_state.active_tab = "analyze"
+
+    # ✅ Tab layout
     tab1, tab2 = st.tabs(["📊 Analyze Inbox", "🗑️ Clean Up Senders"])
 
     with tab1:
-        top_senders_tool(service)   # your existing analysis tool
+        top_senders_tool(service)  # your analysis tool
+
+        # 👇 Button appears after analysis (logic already in top_senders_tool)
+        if st.session_state.get("analysis_done"):
+            st.divider()
+            st.markdown("### 🧹 Next Step: Clean Up Unwanted Senders")
+            st.info("You can now delete emails from selected senders using the cleanup section.")
+
+            if st.button("🚮 Go to Cleanup Section"):
+                st.session_state.active_tab = "cleanup"
+                st.rerun()
 
     with tab2:
-        delete_top_senders(service)  # the new cleanup section
+        # 👇 Only show cleanup if analysis has been completed at least once
+        if not st.session_state.get("top_senders"):
+            st.warning("⚠️ Run the inbox analysis first to identify top senders.")
+        else:
+            delete_top_senders(service)
+
+    # ✅ Automatically switch tab after analysis if requested
+    if st.session_state.active_tab == "cleanup":
+        st.experimental_set_query_params(tab="cleanup")
+
+
 
 
         
