@@ -275,6 +275,7 @@ def top_senders_tool(service):
 
 
 
+
 from datetime import datetime, time, timedelta
 
 def delete_top_senders(service):
@@ -284,22 +285,30 @@ def delete_top_senders(service):
         st.warning("⚠️ Run the analysis first to identify top senders.")
         return
 
-    # Reset sender checkboxes when entering delete mode
-    for key in list(st.session_state.keys()):
-        if key.startswith("sender_"):
-            del st.session_state[key]
+    # ✅ Safely get date range (fallback if not found)
+    params = st.session_state.get("analysis_params", {})
+    start_date = params.get("start")
+    end_date = params.get("end")
+
+    if not start_date or not end_date:
+        st.info("📅 No date range found — using entire inbox by default.")
+        start_ts, end_ts = None, None
+    else:
+        start_ts = int(datetime.combine(start_date, time.min).timestamp())
+        end_ts = int((datetime.combine(end_date, time.min) + timedelta(days=1)).timestamp())
+        st.info(f"📅 Deleting only emails between {start_date} and {end_date}")
+
+    # ✅ Reset sender checkboxes on first entry
+    if "delete_tab_initialized" not in st.session_state:
+        for key in list(st.session_state.keys()):
+            if key.startswith("sender_"):
+                del st.session_state[key]
+        st.session_state.delete_tab_initialized = True
 
     df = st.session_state["top_senders"]
-    params = st.session_state.get("analysis_params", {})
-    start_ts = int(datetime.combine(params.get("start"), time.min).timestamp())
-    end_ts = int((datetime.combine(params.get("end"), time.min) + timedelta(days=1)).timestamp())
-
-    st.info(f"📅 Deleting only emails between {params.get('start')} and {params.get('end')}")
-
     st.write("Select the senders you want to delete emails from:")
-    selected = []
 
-    # Display each sender with checkbox
+    selected = []
     for i, row in df.iterrows():
         if st.checkbox(f"{row['Sender']} — {row['Count']} emails", key=f"sender_{i}"):
             selected.append(row["Sender"])
@@ -308,7 +317,7 @@ def delete_top_senders(service):
         st.info("No senders selected yet.")
         return
 
-    st.success(f"✅ You selected {len(selected)} sender(s): {', '.join(selected)}")
+    st.success(f"✅ Selected {len(selected)} sender(s): {', '.join(selected)}")
 
     if st.button("🚮 Move selected emails to Trash"):
         total_deleted = 0
@@ -316,7 +325,12 @@ def delete_top_senders(service):
         status = st.empty()
 
         for idx, sender in enumerate(selected):
-            query = f"from:{sender} after:{start_ts} before:{end_ts}"
+            # ✅ Build the Gmail search query dynamically
+            if start_ts and end_ts:
+                query = f"from:{sender} after:{start_ts} before:{end_ts}"
+            else:
+                query = f"from:{sender}"
+
             try:
                 results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
                 messages = results.get("messages", [])
@@ -325,12 +339,20 @@ def delete_top_senders(service):
                     total_deleted += 1
             except Exception as e:
                 st.error(f"Error deleting emails from {sender}: {e}")
+
             progress.progress((idx + 1) / len(selected))
             status.text(f"Processed {idx + 1}/{len(selected)} senders...")
 
-        st.success(f"✅ Moved {total_deleted} emails to Trash (filtered by date range).")
+        st.success(f"✅ Moved {total_deleted} emails to Trash.")
         progress.empty()
         status.empty()
+
+        # ✅ Reset all sender checkboxes for safety after deletion
+        for key in list(st.session_state.keys()):
+            if key.startswith("sender_"):
+                del st.session_state[key]
+        st.session_state.delete_tab_initialized = False
+
 
 
 
