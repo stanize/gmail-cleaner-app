@@ -113,50 +113,35 @@ def search_by_sender(service):
 
 
 
-from collections import Counter
 from datetime import datetime, date, time, timedelta
-from email.utils import parseaddr
-
-
 from collections import Counter
-from datetime import datetime, date
-import streamlit as st
 from email.utils import parseaddr
-
+import streamlit as st
 
 def top_senders_tool(service):
-   # --- Ensure we stay on this screen ---
-    if "show_top_senders" not in st.session_state:
-        st.session_state.show_top_senders = True
-
     st.subheader("📊 Top Senders — Setup")
 
-    # --- Defaults ---
+    # --- Initialize session state ---
+    if "analysis_params" not in st.session_state:
+        st.session_state.analysis_params = None
+
     current_year = datetime.now().year
     default_start = date(current_year, 1, 1)
     default_end = date.today()
 
-    # --- Use session state so values persist ---
-    if "start_date" not in st.session_state:
-        st.session_state.start_date = default_start
-    if "end_date" not in st.session_state:
-        st.session_state.end_date = default_end
-    if "email_limit" not in st.session_state:
-        st.session_state.email_limit = 2000
-
-    # --- Inputs ---
+    # --- Input fields ---
     c1, c2 = st.columns(2)
     with c1:
         start_date = st.date_input(
             "Start date",
-            value=st.session_state.start_date,
-            key="start_date_input"
+            value=st.session_state.get("start_date", default_start),
+            key="ts_start"
         )
     with c2:
         end_date = st.date_input(
             "End date",
-            value=st.session_state.end_date,
-            key="end_date_input"
+            value=st.session_state.get("end_date", default_end),
+            key="ts_end"
         )
 
     email_limit = st.number_input(
@@ -164,21 +149,99 @@ def top_senders_tool(service):
         min_value=100,
         max_value=10000,
         step=100,
-        value=st.session_state.email_limit,
-        key="email_limit_input"
+        value=st.session_state.get("email_limit", 2000),
+        help="Limit how many emails will be scanned for analysis.",
+        key="ts_limit"
     )
 
-    # --- Update session on change ---
+    # --- Save user choices ---
     st.session_state.start_date = start_date
     st.session_state.end_date = end_date
     st.session_state.email_limit = email_limit
 
-    # --- Display selections ---
     st.divider()
     st.write(f"🗓️ **Selected Range:** {start_date} → {end_date}")
     st.write(f"📬 **Email Limit:** {email_limit:,}")
 
-    st.info("✅ Now your selections will stay in place — even after reruns.")
+    # --- Run analysis when button clicked ---
+    if st.button("▶️ Run Analysis"):
+        st.session_state.analysis_params = {
+            "start": start_date,
+            "end": end_date,
+            "limit": email_limit
+        }
+
+        start_ts = int(datetime.combine(start_date, time.min).timestamp())
+        end_ts = int((datetime.combine(end_date, time.min) + timedelta(days=1)).timestamp())
+        query = f"in:inbox after:{start_ts} before:{end_ts} -in:spam -in:trash"
+
+        st.info("⏳ Fetching emails... Please wait.")
+        progress = st.progress(0)
+        status = st.empty()
+
+        # --- Step 1: Fetch all message IDs ---
+        messages = []
+        results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
+        messages.extend(results.get("messages", []))
+
+        while 'nextPageToken' in results and len(messages) < email_limit:
+            results = service.users().messages().list(
+                userId="me",
+                q=query,
+                pageToken=results['nextPageToken'],
+                maxResults=500
+            ).execute()
+            messages.extend(results.get("messages", []))
+            progress.progress(min(len(messages) / email_limit, 1.0))
+            status.text(f"📬 Loaded {len(messages)} messages...")
+
+        if len(messages) > email_limit:
+            messages = messages[:email_limit]
+            st.warning(f"⚠️ Limiting to first {email_limit} messages for performance.")
+
+        total = len(messages)
+        if total == 0:
+            st.warning("No messages found in this range.")
+            return
+
+        st.success(f"✅ Found {total} emails in your inbox during this period.")
+        progress.progress(0)
+        status.text("Analyzing senders...")
+
+        # --- Step 2: Analyze sender emails ---
+        senders = []
+        for i, msg in enumerate(messages):
+            try:
+                data = service.users().messages().get(
+                    userId="me",
+                    id=msg["id"],
+                    format="metadata",
+                    metadataHeaders=["From"]
+                ).execute()
+                headers = data["payload"]["headers"]
+                sender_val = next((h["value"] for h in headers if h["name"] == "From"), None)
+                if sender_val:
+                    senders.append(parseaddr(sender_val)[1].lower())
+            except Exception:
+                continue
+
+            if (i + 1) % 10 == 0 or (i + 1) == total:
+                progress.progress((i + 1) / total)
+                status.text(f"📊 Analyzed {i + 1}/{total} emails...")
+
+        # --- Step 3: Display results ---
+        status.text("✅ Analysis complete!")
+        progress.empty()
+
+        counts = Counter(senders).most_common(10)
+        st.divider()
+        st.success("Top 10 senders:")
+        st.table({
+            "Sender": [s for s, _ in counts],
+            "Count": [c for _, c in counts]
+        })
+
+
 
 # ---------- Gmail Management ----------
 def gmail_manager():
