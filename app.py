@@ -112,30 +112,47 @@ def search_by_sender(service):
             st.rerun()   # 👈 ADD THIS LINE
 
 
-
 def top_senders_this_year(service):
     st.subheader("📊 Top Senders (This Year)")
 
-    # --- Gmail query for this year ---
     year_start = datetime(datetime.now().year, 1, 1)
     query = f"in:inbox after:{int(year_start.timestamp())} -in:spam -in:trash"
 
     st.info("Fetching email list... ⏳")
-    results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
-    messages = results.get("messages", [])
-    total = len(messages)
 
+    # --- Step 1: Fetch all message IDs (with pagination) ---
+    messages = []
+    results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
+    messages.extend(results.get("messages", []))
+
+    while 'nextPageToken' in results:
+        results = service.users().messages().list(
+            userId="me",
+            q=query,
+            pageToken=results['nextPageToken'],
+            maxResults=500
+        ).execute()
+        messages.extend(results.get("messages", []))
+        st.write(f"📬 Loaded {len(messages)} messages so far...")
+
+        # Optional: safety limit to avoid overloading
+        if len(messages) >= 2000:
+            st.warning("⚠️ Showing only the first 2000 emails for performance reasons.")
+            messages = messages[:2000]
+            break
+
+    total = len(messages)
     if total == 0:
         st.warning("No messages found this year.")
         return
 
     st.success(f"Found {total} emails in your inbox this year.")
+
+    # --- Step 2: Analyze with live progress ---
     progress = st.progress(0)
     status_text = st.empty()
-
     senders = []
 
-    # --- Iterate with progress ---
     for i, m in enumerate(messages):
         try:
             msg = service.users().messages().get(
@@ -147,15 +164,15 @@ def top_senders_this_year(service):
                 email = parseaddr(sender[0])[1].lower()
                 senders.append(email)
         except Exception:
-            continue  # skip if any message fails
+            continue
 
-        # Update progress
-        progress.progress((i + 1) / total)
-        status_text.text(f"Analyzed {i+1}/{total} emails...")
+        if (i + 1) % 10 == 0 or (i + 1) == total:
+            progress.progress((i + 1) / total)
+            status_text.text(f"Analyzed {i + 1}/{total} emails...")
 
     status_text.text("✅ Analysis complete!")
 
-    # --- Count and display top senders ---
+    # --- Step 3: Display results ---
     counts = Counter(senders).most_common(10)
     st.divider()
     st.success("Here are your top 10 senders this year:")
@@ -165,7 +182,7 @@ def top_senders_this_year(service):
 
 # ---------- Gmail Management ----------
 def gmail_manager():
-    st.subheader("📧 Gmail Inbox Analysis")
+    # st.subheader("📧 Gmail Inbox Analysis")
 
     creds_info = st.session_state.get("credentials")
     if creds_info:
