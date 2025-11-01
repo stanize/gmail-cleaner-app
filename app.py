@@ -61,7 +61,31 @@ def authorize_gmail():
 def gmail_manager():
     st.subheader("📧 Manage Emails by Sender")
 
-    creds = Credentials.from_authorized_user_info(st.session_state.get("credentials"), scopes=SCOPES)
+    from google.auth.transport.requests import Request
+
+    creds_info = st.session_state.get("credentials")
+    if creds_info:
+        creds = Credentials.from_authorized_user_info(creds_info, scopes=SCOPES)
+        if creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+                # Update refreshed credentials back into session
+                st.session_state["credentials"] = {
+                    "token": creds.token,
+                    "refresh_token": creds.refresh_token,
+                    "token_uri": creds.token_uri,
+                    "client_id": creds.client_id,
+                    "client_secret": creds.client_secret,
+                    "scopes": creds.scopes,
+                }
+            except Exception as e:
+                st.error(f"⚠️ Token refresh failed: {e}")
+                st.session_state["authorized"] = False
+                st.stop()
+    else:
+        st.error("⚠️ No valid Gmail credentials found.")
+        st.stop()
+
     service = build("gmail", "v1", credentials=creds)
 
     sender_email = st.text_input("Enter sender email to search", placeholder="e.g. no-reply@company.com")
