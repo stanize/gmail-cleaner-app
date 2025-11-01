@@ -112,8 +112,6 @@ def search_by_sender(service):
             st.rerun()   # 👈 ADD THIS LINE
 
 
-
-
 from datetime import datetime, date, time, timedelta
 from collections import Counter
 from email.utils import parseaddr
@@ -189,7 +187,7 @@ def top_senders_tool(service):
         progress = st.progress(0)
         status = st.empty()
 
-        # --- Step 1: Fetch all message IDs ---
+        # --- Step 1: Fetch message IDs ---
         messages = []
         results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
         messages.extend(results.get("messages", []))
@@ -244,11 +242,15 @@ def top_senders_tool(service):
         progress.empty()
 
         counts = Counter(senders).most_common(top_n)
-        st.divider()
-        st.success(f"Top {top_n} senders:")
+
+        if not counts:
+            st.warning("No senders found.")
+            return
 
         df = pd.DataFrame(counts, columns=["Sender", "Count"])
-        st.table(df)
+
+        # Save for later deletion functionality
+        st.session_state["top_senders"] = df
 
         # --- Step 4: Chart ---
         fig = px.bar(
@@ -258,21 +260,73 @@ def top_senders_tool(service):
             orientation="h",
             text="Count",
             title=f"Top {top_n} Senders by Email Count",
+            color="Count",
+            color_continuous_scale="Aggrnyl",
         )
         fig.update_layout(
             xaxis_title="Number of Emails",
             yaxis_title="Sender",
-            template="plotly_white",
-            height=400,
+            template="plotly_dark",
+            height=450,
         )
         st.plotly_chart(fig, use_container_width=True)
 
 
 
+
+
+
+def delete_top_senders(service):
+    st.subheader("🗑️ Clean Up by Sender")
+
+    if "top_senders" not in st.session_state:
+        st.warning("⚠️ Run the analysis first to identify top senders.")
+        return
+
+    df = st.session_state["top_senders"]
+
+    st.write("Select the senders you want to delete emails from:")
+    selected = []
+
+    # Display each sender with checkbox
+    for i, row in df.iterrows():
+        if st.checkbox(f"{row['Sender']} — {row['Count']} emails", key=f"sender_{i}"):
+            selected.append(row['Sender'])
+
+    if not selected:
+        st.info("No senders selected yet.")
+        return
+
+    st.success(f"✅ You selected {len(selected)} sender(s): {', '.join(selected)}")
+
+    if st.button("🚮 Move all emails from selected senders to Trash"):
+        total_deleted = 0
+        progress = st.progress(0)
+        status = st.empty()
+
+        for idx, sender in enumerate(selected):
+            query = f"from:{sender}"
+            try:
+                results = service.users().messages().list(userId="me", q=query, maxResults=500).execute()
+                messages = results.get("messages", [])
+                for msg in messages:
+                    service.users().messages().trash(userId="me", id=msg["id"]).execute()
+                    total_deleted += 1
+            except Exception as e:
+                st.error(f"Error deleting emails from {sender}: {e}")
+            progress.progress((idx + 1) / len(selected))
+            status.text(f"Processed {idx + 1}/{len(selected)} senders...")
+
+        st.success(f"✅ Moved {total_deleted} emails to Trash.")
+        progress.empty()
+        status.empty()
+
+
+
+
+
 # ---------- Gmail Management ----------
 def gmail_manager():
-    # st.subheader("📧 Gmail Inbox Analysis")
-
     creds_info = st.session_state.get("credentials")
     if creds_info:
         creds = Credentials.from_authorized_user_info(creds_info, scopes=SCOPES)
@@ -298,22 +352,15 @@ def gmail_manager():
     # ✅ Create Gmail service
     service = build("gmail", "v1", credentials=creds)
 
-    # ✅ Display only analysis feature for now
-    st.info("This version is running in analysis-only mode (delete disabled).")
+    # ---------- Tabs for Analysis & Cleanup ----------
+    tab1, tab2 = st.tabs(["📊 Analyze Inbox", "🗑️ Clean Up Senders"])
 
-    st.divider()
+    with tab1:
+        top_senders_tool(service)   # your existing analysis tool
 
-    # Initialize flag if not set
-    if "show_top_senders" not in st.session_state:
-        st.session_state.show_top_senders = False
+    with tab2:
+        delete_top_senders(service)  # the new cleanup section
 
-    # Toggle on when the button is pressed
-    if st.button("📊 Open Top Senders Tool"):
-        st.session_state.show_top_senders = True
-
-    # Always show if flag is True
-    if st.session_state.show_top_senders:
-        top_senders_tool(service)      
 
         
         
