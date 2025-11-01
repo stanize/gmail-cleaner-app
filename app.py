@@ -276,6 +276,7 @@ def top_senders_tool(service):
 
 
 
+
 from datetime import datetime, time, timedelta
 
 def delete_top_senders(service):
@@ -285,20 +286,19 @@ def delete_top_senders(service):
         st.warning("⚠️ Run the analysis first to identify top senders.")
         return
 
-    # ✅ Safely get date range (fallback if not found)
-    params = st.session_state.get("analysis_params", {})
-    start_date = params.get("start")
-    end_date = params.get("end")
-
-    if not start_date or not end_date:
-        st.info("📅 No date range found — using entire inbox by default.")
+    # ✅ Safely retrieve date range if available
+    params = st.session_state.get("analysis_params")
+    if not params or not isinstance(params, dict) or "start" not in params or "end" not in params:
+        st.info("📅 No date range found — using all emails.")
         start_ts, end_ts = None, None
     else:
+        start_date = params.get("start")
+        end_date = params.get("end")
         start_ts = int(datetime.combine(start_date, time.min).timestamp())
         end_ts = int((datetime.combine(end_date, time.min) + timedelta(days=1)).timestamp())
         st.info(f"📅 Deleting only emails between {start_date} and {end_date}")
 
-    # ✅ Reset sender checkboxes on first entry
+    # ✅ Reset checkboxes when entering delete mode
     if "delete_tab_initialized" not in st.session_state:
         for key in list(st.session_state.keys()):
             if key.startswith("sender_"):
@@ -325,7 +325,7 @@ def delete_top_senders(service):
         status = st.empty()
 
         for idx, sender in enumerate(selected):
-            # ✅ Build the Gmail search query dynamically
+            # ✅ Apply date filter if present
             if start_ts and end_ts:
                 query = f"from:{sender} after:{start_ts} before:{end_ts}"
             else:
@@ -347,7 +347,7 @@ def delete_top_senders(service):
         progress.empty()
         status.empty()
 
-        # ✅ Reset all sender checkboxes for safety after deletion
+        # ✅ Reset all sender checkboxes for safety
         for key in list(st.session_state.keys()):
             if key.startswith("sender_"):
                 del st.session_state[key]
