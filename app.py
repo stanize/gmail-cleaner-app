@@ -125,9 +125,9 @@ from email.utils import parseaddr
 
 
 def top_senders_tool(service):
-    # Keep track that we're inside this screen
-    if "top_senders_open" not in st.session_state:
-        st.session_state.top_senders_open = True
+   # --- Ensure we stay on this screen ---
+    if "show_top_senders" not in st.session_state:
+        st.session_state.show_top_senders = True
 
     st.subheader("📊 Top Senders — Setup")
 
@@ -136,34 +136,49 @@ def top_senders_tool(service):
     default_start = date(current_year, 1, 1)
     default_end = date.today()
 
-    # --- Input fields (preserve state) ---
+    # --- Use session state so values persist ---
+    if "start_date" not in st.session_state:
+        st.session_state.start_date = default_start
+    if "end_date" not in st.session_state:
+        st.session_state.end_date = default_end
+    if "email_limit" not in st.session_state:
+        st.session_state.email_limit = 2000
+
+    # --- Inputs ---
     c1, c2 = st.columns(2)
     with c1:
-        st.session_state.start_date = st.date_input(
+        start_date = st.date_input(
             "Start date",
-            value=st.session_state.get("start_date", default_start),
-            key="ts_start"
+            value=st.session_state.start_date,
+            key="start_date_input"
         )
     with c2:
-        st.session_state.end_date = st.date_input(
+        end_date = st.date_input(
             "End date",
-            value=st.session_state.get("end_date", default_end),
-            key="ts_end"
+            value=st.session_state.end_date,
+            key="end_date_input"
         )
 
-    st.session_state.email_limit = st.number_input(
+    email_limit = st.number_input(
         "Maximum emails to analyze",
-        min_value=100, max_value=10000, step=100, value=st.session_state.get("email_limit", 2000),
-        help="This caps how many emails will be scanned.",
-        key="ts_limit"
+        min_value=100,
+        max_value=10000,
+        step=100,
+        value=st.session_state.email_limit,
+        key="email_limit_input"
     )
 
+    # --- Update session on change ---
+    st.session_state.start_date = start_date
+    st.session_state.end_date = end_date
+    st.session_state.email_limit = email_limit
+
+    # --- Display selections ---
     st.divider()
-    st.write(f"🗓️ **Selected Range:** {st.session_state.start_date} → {st.session_state.end_date}")
-    st.write(f"📬 **Email Limit:** {st.session_state.email_limit:,}")
+    st.write(f"🗓️ **Selected Range:** {start_date} → {end_date}")
+    st.write(f"📬 **Email Limit:** {email_limit:,}")
 
-    st.info("✅ Your selections will now stay in place — even when you change them.")
-
+    st.info("✅ Now your selections will stay in place — even after reruns.")
 
 # ---------- Gmail Management ----------
 def gmail_manager():
